@@ -1,5 +1,9 @@
 
-from fastapi import FastAPI
+from fastapi import (
+    FastAPI,
+    BackgroundTasks
+)
+
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
@@ -13,6 +17,26 @@ from yt_service import extract_info
 
 
 app = FastAPI()
+
+
+# =========================
+# AUTO DELETE FILE
+# =========================
+
+def remove_file(path: str):
+
+    try:
+
+        if os.path.exists(path):
+
+            os.remove(path)
+
+    except Exception as e:
+
+        print(
+            "Delete error:",
+            e
+        )
 
 
 # =========================
@@ -78,7 +102,13 @@ def extract(data: UrlRequest):
 # =========================
 
 @app.post("/merge-download")
-def merge_download(data: MergeRequest):
+def merge_download(
+
+    data: MergeRequest,
+
+    background_tasks:
+    BackgroundTasks
+):
 
     output_dir = "downloads"
 
@@ -87,33 +117,33 @@ def merge_download(data: MergeRequest):
     unique_id = str(uuid.uuid4())
 
     output_template = os.path.join(
+
         output_dir,
+
         f"{unique_id}.%(ext)s"
     )
 
-    
     quality = (
+
         data.quality
         .replace("p", "")
         .replace("kbps", "")
         .replace(" (video)", "")
     )
 
-
-
     ydl_opts = {
 
-        
         "format":
 
             "bestaudio/best"
+
             if "kbps" in data.quality
+
             else
+
             f"bestvideo[height<={quality}]"
             f"+bestaudio/"
             f"best[height<={quality}]",
-
-
 
         "outtmpl":
             output_template,
@@ -139,7 +169,9 @@ def merge_download(data: MergeRequest):
         if file.startswith(unique_id):
 
             final_file = os.path.join(
+
                 output_dir,
+
                 file
             )
 
@@ -151,12 +183,25 @@ def merge_download(data: MergeRequest):
             "error": "Merge failed"
         }
 
+    # =========================
+    # AUTO DELETE AFTER SEND
+    # =========================
+
+    background_tasks.add_task(
+
+        remove_file,
+
+        final_file
+    )
+
     return FileResponse(
 
         path=final_file,
 
-        filename=os.path.basename(final_file),
+        filename=os.path.basename(
+            final_file
+        ),
 
-        media_type="video/mp4",
+        media_type=
+            "application/octet-stream",
     )
-
